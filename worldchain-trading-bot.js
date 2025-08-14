@@ -31,6 +31,11 @@ class WorldchainTradingBot {
             'https://worldchain-rpc.publicnode.com'
         ].filter(Boolean);
         
+        // Ensure we have at least one valid RPC endpoint
+        if (rpcEndpoints.length === 0) {
+            throw new Error('No valid RPC endpoints available. Please check your configuration.');
+        }
+        
         // Create provider with Worldchain network configuration
         const worldchainNetwork = {
             name: 'worldchain',
@@ -44,30 +49,37 @@ class WorldchainTradingBot {
         this.wallets = this.loadWallets();
         this.discoveredTokens = this.loadDiscoveredTokens();
         
-        // Initialize advanced modules
-        this.tradingEngine = new AdvancedTradingEngine(this.provider, this.config);
-        this.sinclaveEngine = new SinclaveEnhancedTradingEngine(this.provider, this.config);
-        this.tokenDiscovery = new TokenDiscoveryService(this.provider, this.config);
-        this.strategyBuilder = new StrategyBuilder(this.tradingEngine, this.sinclaveEngine, this.config, this.telegramNotifications);
-        
-        // Initialize Price Database
-        this.priceDatabase = new PriceDatabase(this.sinclaveEngine, this.config);
-        
-        // Connect price database to wallet system
-        this.priceDatabase.findWalletByAddress = (address) => {
-            return Object.values(this.wallets).find(w => w.address.toLowerCase() === address.toLowerCase());
-        };
-        
-        // Initialize ALGORITMIT Strategy
-        this.algoritmitStrategy = new AlgoritmitStrategy(
-            this.tradingEngine, 
-            this.sinclaveEngine, 
-            this.priceDatabase, 
-            this.config
-        );
-
-        // Initialize Telegram notifications
-        this.telegramNotifications = new TelegramNotifications(this.config);
+        // Initialize advanced modules with error handling
+        try {
+            this.tradingEngine = new AdvancedTradingEngine(this.provider, this.config);
+            this.sinclaveEngine = new SinclaveEnhancedTradingEngine(this.provider, this.config);
+            this.tokenDiscovery = new TokenDiscoveryService(this.provider, this.config);
+            
+            // Initialize Telegram notifications first
+            this.telegramNotifications = new TelegramNotifications(this.config);
+            
+            // Initialize Strategy Builder after Telegram notifications
+            this.strategyBuilder = new StrategyBuilder(this.tradingEngine, this.sinclaveEngine, this.config, this.telegramNotifications);
+            
+            // Initialize Price Database
+            this.priceDatabase = new PriceDatabase(this.sinclaveEngine, this.config);
+            
+            // Connect price database to wallet system
+            this.priceDatabase.findWalletByAddress = (address) => {
+                return Object.values(this.wallets).find(w => w.address.toLowerCase() === address.toLowerCase());
+            };
+            
+            // Initialize ALGORITMIT Strategy
+            this.algoritmitStrategy = new AlgoritmitStrategy(
+                this.tradingEngine, 
+                this.sinclaveEngine, 
+                this.priceDatabase, 
+                this.config
+            );
+        } catch (error) {
+            console.error('❌ Error initializing trading modules:', error.message);
+            throw new Error(`Failed to initialize trading modules: ${error.message}`);
+        }
         
         // Initialize price triggers
         this.triggers = [];
